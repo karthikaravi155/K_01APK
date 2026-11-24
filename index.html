@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>EasyShare Leads</title>
+<meta name="theme-color" content="#0E1620">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  :root {
+    --bg: #0E1620; --panel: #141F2B; --panel-2: #182530; --line: #24323F;
+    --text: #E7ECEF; --text-dim: #8DA0AD; --text-faint: #5E717D;
+    --accent: #22A583; --accent-dim: #163B32; --gold: #D4A24C;
+    --bubble-in: #1B2732; --bubble-out: #1D4B3F; --danger: #C25450;
+    --app-h: 100vh;                       /* real visible height; the script below keeps it exact when the keyboard opens */
+    --safe-y: calc(env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px));
+    --vh-full: calc(var(--app-h) - var(--safe-y));
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+  @supports (height: 100dvh) { :root { --app-h: 100dvh; } }
+  :root[data-theme="light"] {
+    --bg: #F4F6F8; --panel: #FFFFFF; --panel-2: #F0F3F5; --line: #DEE4E8;
+    --text: #19242D; --text-dim: #5C6B76; --text-faint: #8B98A2;
+    --accent: #1C8E73; --accent-dim: #DCF3EC; --gold: #AD7A2A;
+    --bubble-in: #EEF1F3; --bubble-out: #D7F0E8; --danger: #C25450;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: none; }   /* stops pull-down-to-refresh from wiping a half-typed message */
+  button, .nav-item, .lead-item { touch-action: manipulation; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: background 0.15s ease, color 0.15s ease; }
+  .theme-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-dim); font-size: 13px; font-weight: 600; background: none; border: none; text-align: left; width: 100%; }
+  .theme-toggle:hover { background: var(--panel-2); color: var(--text); }
+  .theme-toggle-login { position: absolute; top: 18px; right: 18px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 20px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+
+  .login-wrap { position: relative; min-height: var(--vh-full); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+  .login-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 32px 28px; }
+  .login-brand { font-weight: 800; font-size: 19px; text-align: center; margin-bottom: 6px; }
+  .login-brand span { color: var(--accent); }
+  .login-sub { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 24px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
+  .field input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 14px; outline: none; }
+  .field input:focus { border-color: var(--accent); }
+  .btn-primary { width: 100%; background: var(--accent); color: #06140F; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px; }
+  .btn-primary:disabled { opacity: 0.6; }
+  .login-error { color: var(--danger); font-size: 12.5px; margin-top: 10px; text-align: center; min-height: 16px; }
+
+  .app { display: flex; height: 100%; min-height: 100vh; }
+  .nav { width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 12px; }
+  .brand { font-weight: 800; font-size: 16px; padding: 0 10px 6px; letter-spacing: -0.01em; }
+  .brand span { color: var(--accent); }
+  .who { padding: 0 10px 20px; font-size: 11.5px; color: var(--text-dim); border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .who .role-tag { display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--accent-dim); color: var(--accent); text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-dim); font-size: 13.5px; font-weight: 600; cursor: pointer; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--panel-2); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-icon { width: 18px; text-align: center; }
+  .nav-spacer { flex: 1; }
+  .logout-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-faint); font-size: 13px; font-weight: 600; background: none; border: none; text-align: left; }
+  .logout-btn:hover { background: var(--panel-2); color: var(--danger); }
+
+  .main { flex: 1; min-width: 0; overflow-y: auto; }
+  .page { padding: 26px 30px; }
+  .page-head { margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .page-title { font-size: 20px; font-weight: 800; }
+  .page-sub { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  .tl-filter { display: flex; align-items: center; gap: 8px; }
+  .tl-filter label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .tl-filter select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 30px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .stat-label { font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
+  .stat-value { font-size: 26px; font-weight: 800; margin-top: 8px; }
+  .stat-note { font-size: 11.5px; color: var(--accent); margin-top: 4px; }
+
+  .panel-block { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .panel-block h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .panel-block p { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+
+  .table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .search-row { display: flex; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .search-row input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 16px; font-size: 11.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .tag.done { background: var(--accent-dim); color: var(--accent); }
+  .tag.progress { background: #3A2E14; color: var(--gold); }
+  .table-scroll { overflow-x: auto; }
+
+  .chats-layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  @media (max-width: 760px) {
+    .chats-layout { grid-template-columns: 1fr; }
+  }
+  .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; }
+  .lead-col .search-row { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  .lead-item { display: flex; gap: 10px; padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .lead-item:hover, .lead-item.active { background: var(--panel-2); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .lead-meta { min-width: 0; flex: 1; }
+  .lead-top { display: flex; justify-content: space-between; gap: 6px; }
+  .lead-phone { font-size: 13px; font-weight: 600; }
+  .lead-time { font-size: 10.5px; color: var(--text-faint); flex-shrink: 0; }
+  .lead-preview { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .thread-col { display: flex; flex-direction: column; background: var(--bg); }
+  .thread-head { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .back-btn { display: none; align-items: center; justify-content: center; width: 40px; height: 40px; margin-left: -8px; background: none; border: none; color: var(--text-dim); font-size: 28px; line-height: 1; border-radius: 50%; }
+  .back-btn:active { background: var(--panel-2); }
+  @media (max-width: 760px) { .back-btn { display: flex; } }
+  .thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 70%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
+  .bubble.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
+  .bubble-time { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); text-align: right; }
+  /* Delivery ticks on messages we sent: one grey = sent, two grey = delivered, two blue = read, red ! = failed */
+  .ticks { display: inline-flex; align-items: center; margin-left: 4px; vertical-align: -2px; }
+  .ticks svg { width: 17px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ticks.read { color: #34B7F1; }
+  .ticks.failed { color: var(--danger); }
+  .ticks.sent, .ticks.delivered, .ticks.pending { color: var(--text-faint); }
+
+
+  /* Message box (WhatsApp-style): sits under the thread, never re-rendered by live updates so a draft is kept */
+  .composer { flex-shrink: 0; border-top: 1px solid var(--line); background: var(--panel); padding: 8px 10px; }
+  .composer-row { display: flex; align-items: flex-end; gap: 8px; }
+  .composer textarea { flex: 1; resize: none; max-height: 140px; min-height: 40px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 20px; padding: 10px 14px; color: var(--text); font-family: inherit; font-size: 14px; line-height: 1.4; outline: none; }
+  .composer textarea:focus { border-color: var(--accent); }
+  .composer textarea:disabled { opacity: 0.6; }
+  .send-btn { width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; border: none; background: var(--accent); color: #06140F;
+    font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .send-btn:disabled { opacity: 0.45; cursor: default; }
+  .composer-note { font-size: 11.5px; color: var(--text-dim); padding: 0 6px 6px; min-height: 0; }
+  .composer-note:empty { display: none; }
+  .composer-note.err { color: var(--danger); }
+  .bubble.pending { opacity: 0.65; }
+
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); text-align: center; padding: 30px; }
+  .loading { display: flex; align-items: center; justify-content: center; height: var(--vh-full); color: var(--text-dim); font-size: 13px; }
+
+  /* Scroll fix: messages scroll inside the chat box */
+  .chats-layout { grid-template-rows: minmax(0, 1fr); }
+  .lead-col, .thread-col { min-height: 0; }
+  .thread { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+  /* WhatsApp-style day groups: the date pill floats at the top while you scroll through that day */
+  .day-group { display: flex; flex-direction: column; gap: 8px; }
+  .day-sep { position: sticky; top: 4px; z-index: 2; align-self: center; margin: 6px 0 2px; padding: 4px 12px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim);
+    font-size: 11.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+
+  /* ---------- Phone layout (<= 760px) ----------
+     - side menu becomes a bottom tab bar (hidden while a chat is open, like WhatsApp)
+     - Chats: list first, tapping a lead opens the conversation full screen, back returns to the list
+     - Contacts: each lead is a card instead of a wide table
+     - everything is sized from the real visible height so the message box never hides behind the keyboard */
+  @media (max-width: 760px) {
+    input, textarea, select { font-size: 16px !important; }   /* 16px stops phones zooming in when a field is tapped */
+
+    .app { flex-direction: column-reverse; height: 100vh; height: var(--vh-full); min-height: 0; }
+    .nav { width: 100%; flex-direction: row; align-items: stretch; padding: 4px 6px; gap: 2px;
+      border-right: none; border-top: 1px solid var(--line); flex-shrink: 0; }
+    .brand, .who, .nav-spacer { display: none; }
+    .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 2px; margin: 0; padding: 6px 4px; min-height: 52px; font-size: 11.5px; text-align: center; }
+    .nav-icon { width: auto; font-size: 17px; line-height: 1; }
+    .theme-toggle, .logout-btn { width: 48px; min-height: 52px; padding: 6px; font-size: 0; gap: 0; justify-content: center; flex-shrink: 0; }
+    .theme-toggle .nav-icon, .logout-btn .nav-icon { font-size: 18px; }
+
+    .main { min-height: 0; display: flex; flex-direction: column; }
+    .page { padding: 14px 12px; }
+    .page-title { font-size: 18px; }
+    .page-head { margin-bottom: 14px; }
+    .tl-filter { width: 100%; }
+    .tl-filter select { flex: 1; min-height: 40px; }
+    .search-row input { min-height: 40px; }
+
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .stat-card { padding: 14px; }
+    .stat-value { font-size: 22px; margin-top: 6px; }
+
+    /* Contacts as cards */
+    .table-scroll { overflow: visible; }
+    #contacts-table, #contacts-table tbody { display: block; width: 100%; }
+    #contacts-table thead { display: none; }
+    #contacts-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    #contacts-table tr:last-child { border-bottom: none; }
+    #contacts-table td { display: block; padding: 0; border: none; white-space: normal; overflow-wrap: anywhere; font-size: 13.5px; }
+    #contacts-table td::before { content: attr(data-label); display: block; margin-bottom: 1px; font-size: 11px; font-weight: 600; color: var(--text-faint); }
+    #contacts-table td:first-child { grid-column: 1 / -1; font-size: 14.5px; font-weight: 600; }
+    #contacts-table td:first-child::before { display: none; }
+    #contacts-table td[colspan] { grid-column: 1 / -1; }
+    #contacts-table td[colspan]::before { display: none; }
+
+    /* Chats: list OR conversation, filling the screen */
+    .page.chats-page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 10px 0; }
+    .chats-page .page-head { margin-bottom: 10px; }
+    .chats-layout { flex: 1; height: auto; min-height: 0; }
+    .chats-layout .lead-col { display: flex; }
+    .chats-layout .thread-col { display: none; }
+    .chats-layout.show-thread .lead-col { display: none; }
+    .chats-layout.show-thread .thread-col { display: flex; }
+    .lead-item { padding: 12px; }
+    .thread-head { padding: 8px 12px; gap: 8px; }
+    .thread { padding: 12px 10px; }
+    .bubble { max-width: 85%; }
+    .composer { padding: 8px 8px 10px; }
+    .send-btn { width: 46px; height: 46px; }
+
+    /* While a conversation is open: no bottom tabs, no page title, edge to edge */
+    .app.in-thread .nav { display: none; }
+    .app.in-thread .page.chats-page { padding: 0; }
+    .app.in-thread .chats-page .page-head { display: none; }
+    .app.in-thread .chats-layout { border: none; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+(function syncVisibleHeight() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const set = () => {
+    if (vv.scale > 1.01) return;   // do not fight the person's own pinch-zoom
+    document.documentElement.style.setProperty('--app-h', Math.round(vv.height) + 'px');
+    if (window.scrollY) window.scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', set);
+  vv.addEventListener('scroll', () => { if (vv.scale <= 1.01 && vv.offsetTop) window.scrollTo(0, 0); });
+  set();
+})();
+function syncThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'light' ? '#F4F6F8' : '#0E1620');
+}
+(function initTheme() {
+  try {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {}
+  syncThemeColorMeta();
+})();
+window.toggleTheme = function() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', 'light');
+  try { localStorage.setItem('theme', isLight ? 'dark' : 'light'); } catch (e) {}
+  syncThemeColorMeta();
+  render();
+};
+function themeIcon() { return document.documentElement.getAttribute('data-theme') === 'light' ? '🌙' : '☀️'; }
+
+// SUPABASE_URL and SUPABASE_ANON_KEY come from config.js
+
+const state = {
+  session: null, profile: null, allProfiles: [], leads: [], messages: [],
+  page: 'dashboard', activePhone: null, tlFilter: 'all', loading: true, initError: false,
+};
+
+let supabaseClient = null;
+try {
+  if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.indexOf('PASTE_') === 0) throw new Error('Set SUPABASE_ANON_KEY in config.js');
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  state.loading = false;
+  state.initError = true;
+}
+
+function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+function fmtTime(ts) { const d = new Date(ts); if (isNaN(d)) return ''; return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
+function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dayKey(ts) { const d = new Date(ts); return isNaN(d) ? 'unknown' : d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+// "Today", "Yesterday", otherwise the full date (e.g. 29 Oct 2026) - same idea as WhatsApp
+function dayLabel(ts) {
+  const d = new Date(ts); if (isNaN(d)) return '';
+  const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function fmtListTime(ts) {
+  const d = new Date(ts); if (isNaN(d)) return '';
+  const label = dayLabel(ts);
+  if (label === 'Today') return fmtTime(ts);
+  if (label === 'Yesterday') return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+function initials(phone) { return String(phone).replace(/\D/g, '').slice(-2) || '??'; }
+
+async function init() {
+  if (!supabaseClient) { render(); return; }
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    state.session = session;
+    if (session) await loadAppData();
+    state.loading = false;
+    render();
+    if (session) startLive();
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      const prevUid = state.session?.user?.id;
+      state.session = session;
+      if (!session) {
+        if (prevUid) { stopLive(); state.profile = null; state.leads = []; state.messages = []; state.activePhone = null; render(); }
+        return;
+      }
+      // Token refreshes and re-focus events must not rebuild the screen (that was resetting the chat scroll).
+      if (session.user.id === prevUid && state.profile) return;
+      setTimeout(async () => { await loadAppData(); render(); startLive(); }, 0);
+    });
+  } catch (err) {
+    state.loading = false;
+    state.initError = true;
+    render();
+  }
+}
+
+async function login(email, password) {
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  return error;
+}
+async function logout() { await supabaseClient.auth.signOut(); }
+
+async function loadAppData() {
+  const uid = state.session.user.id;
+  const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', uid).single();
+  state.profile = profile;
+
+  if (profile && profile.role === 'admin') {
+    const { data: profiles } = await supabaseClient.from('profiles').select('*').eq('role', 'tl');
+    state.allProfiles = profiles || [];
+  }
+
+  await fetchLeadsAndMessages();
+}
+
+// Supabase returns at most 1000 rows per request, so read in pages. Without this, once the
+// table grows past 1000 rows the NEWEST messages are the ones that silently go missing.
+async function fetchAllRows(table, orderCol, ascending) {
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabaseClient.from(table).select('*')
+      .order(orderCol, { ascending }).order('id', { ascending })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows;
+}
+async function fetchLeadsAndMessages() {
+  const [leads, messages] = await Promise.all([
+    fetchAllRows('leads', 'timestamp', false),
+    fetchAllRows('messages', 'timestamp', true),
+  ]);
+  state.leads = leads;
+  state.messages = messages.concat(state.messages.filter(m => m.pending));
+}
+function dataSignature() {
+  const lastMsg = state.messages.length ? state.messages[state.messages.length - 1].id : 0;
+  const recentStatus = state.messages.slice(-40).map(m => m.status ? m.status[0] : '-').join('');   // so a new tick triggers a redraw
+  return state.messages.length + ':' + lastMsg + ':' + recentStatus + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.timestamp].join('~')).join(',');
+}
+
+/* ---------- Live updates ----------
+   1) Realtime: Supabase pushes every new/changed message and lead straight to the screen.
+   2) Safety net: a quiet re-sync every 30s, when the app comes back to the foreground, and when the
+      network returns - so nothing is missed if the phone slept or the connection dropped. */
+let liveChannel = null, syncing = false, pollTimer = null;
+
+function startLive() {
+  stopLive();
+  if (!supabaseClient || !state.session) return;
+  liveChannel = supabaseClient.channel('crm-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onMessageEvent)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, onLeadEvent)
+    .subscribe((status) => { if (status === 'SUBSCRIBED') resync(); });
+  pollTimer = setInterval(() => { if (!document.hidden) resync(); }, 30000);
+}
+function stopLive() {
+  if (liveChannel) { try { supabaseClient.removeChannel(liveChannel); } catch (e) {} liveChannel = null; }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+async function resync() {
+  if (syncing || !state.session || !state.profile) return;
+  syncing = true;
+  try {
+    const before = dataSignature();
+    await fetchLeadsAndMessages();
+    if (dataSignature() !== before) softRender();
+  } catch (e) { /* offline or a hiccup: keep what is on screen, try again next time */ }
+  syncing = false;
+}
+function onMessageEvent(payload) {
+  const m = payload.new;
+  if (!m || m.id == null) return;
+  if (m.direction === 'out') state.messages = state.messages.filter(x => !(x.pending && x.phone === m.phone && x.message === m.message));
+  const i = state.messages.findIndex(x => x.id === m.id);
+  if (i >= 0) state.messages[i] = m; else state.messages.push(m);
+  softRender();
+}
+async function onLeadEvent(payload) {
+  const l = payload.new;
+  if (!l || l.id == null) return;
+  const i = state.leads.findIndex(x => x.id === l.id);
+  const wasKnown = i >= 0;
+  if (wasKnown) state.leads[i] = l; else state.leads.push(l);
+  state.leads.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  if (!wasKnown) {
+    // A lead this screen has not seen before (new, or just assigned to this team lead): load its history.
+    try {
+      const { data } = await supabaseClient.from('messages').select('*').eq('phone', l.phone).order('timestamp', { ascending: true }).limit(1000);
+      const have = new Set(state.messages.map(x => x.id));
+      for (const m of (data || [])) if (!have.has(m.id)) state.messages.push(m);
+    } catch (e) {}
+  }
+  softRender();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
+window.addEventListener('online', resync);
+
+function renderLogin() {
+  return `
+    <div class="login-wrap">
+      <button class="theme-toggle-login" onclick="toggleTheme()" title="Toggle theme">${themeIcon()}</button>
+      <div class="login-card">
+        <div class="login-brand">EasyShare <span>Leads</span></div>
+        <div class="login-sub">Sign in to view your leads</div>
+        <form id="login-form">
+          <div class="field"><label>Email</label><input type="email" id="login-email" required autocomplete="username"></div>
+          <div class="field"><label>Password</label><input type="password" id="login-password" required autocomplete="current-password"></div>
+          <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+          <div class="login-error" id="login-error"></div>
+        </form>
+      </div>
+    </div>`;
+}
+function wireLogin() {
+  const form = document.getElementById('login-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const errEl = document.getElementById('login-error');
+    btn.disabled = true; btn.textContent = 'Signing in…'; errEl.textContent = '';
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const error = await login(email, password);
+    if (error) { errEl.textContent = error.message; btn.disabled = false; btn.textContent = 'Sign In'; }
+  });
+}
+
+function visibleLeads() {
+  if (state.profile.role === 'admin') {
+    return state.tlFilter === 'all' ? state.leads : state.leads.filter(l => l.assigned_to === state.tlFilter);
+  }
+  return state.leads.filter(l => l.assigned_to === state.profile.id);
+}
+function visibleMessages() {
+  const phones = new Set(visibleLeads().map(l => l.phone));
+  return state.messages.filter(m => phones.has(m.phone));
+}
+function tlName(id) {
+  const p = state.allProfiles.find(p => p.id === id);
+  return p ? p.name : '—';
+}
+
+function renderApp() {
+  return `
+    <div class="app">
+      <div class="nav">
+        <div class="brand">EasyShare <span>Leads</span></div>
+        <div class="who">Signed in as<br><strong style="color:var(--text)">${esc(state.profile?.name || state.session.user.email)}</strong>
+          <div class="role-tag">${esc(state.profile?.role || '')}</div>
+        </div>
+        <div class="nav-item ${state.page==='dashboard'?'active':''}" data-page="dashboard"><span class="nav-icon">◆</span> Dashboard</div>
+        <div class="nav-item ${state.page==='contacts'?'active':''}" data-page="contacts"><span class="nav-icon">☰</span> Contacts</div>
+        <div class="nav-item ${state.page==='chats'?'active':''}" data-page="chats"><span class="nav-icon">✆</span> Chats</div>
+        <div class="nav-spacer"></div>
+        <button class="theme-toggle" onclick="toggleTheme()"><span class="nav-icon">${themeIcon()}</span> ${document.documentElement.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode'}</button>
+        <button class="logout-btn" id="logout-btn"><span class="nav-icon">⏻</span> Sign Out</button>
+      </div>
+      <div class="main" id="main"></div>
+    </div>`;
+}
+
+function tlFilterHtml() {
+  if (!state.profile || state.profile.role !== 'admin') return '';
+  const opts = state.allProfiles.map(p => `<option value="${p.id}" ${state.tlFilter===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  return `
+    <div class="tl-filter">
+      <label>Viewing:</label>
+      <select id="tl-filter-select">
+        <option value="all" ${state.tlFilter==='all'?'selected':''}>All Team Leads</option>
+        ${opts}
+      </select>
+    </div>`;
+}
+
+function renderDashboard() {
+  const leads = visibleLeads();
+  const msgs = visibleMessages();
+  const total = leads.length;
+  const done = leads.filter(l => l.step === 'done').length;
+  const open = total - done;
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Welcome back, ${esc(state.profile.name)} 👋</div>
+          <div class="page-sub">Here's what's happening with your WhatsApp leads today.</div>
+        </div>
+        ${tlFilterHtml()}
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">${total}</div><div class="stat-note">from WhatsApp</div></div>
+        <div class="stat-card"><div class="stat-label">Completed Signups</div><div class="stat-value">${done}</div><div class="stat-note">ready for advisor</div></div>
+        <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value">${open}</div><div class="stat-note">mid-flow</div></div>
+        <div class="stat-card"><div class="stat-label">Messages Logged</div><div class="stat-value">${msgs.length}</div><div class="stat-note">total exchanged</div></div>
+      </div>
+      <div class="panel-block">
+        <h3>Live data</h3>
+        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically, no refresh needed.</p>
+      </div>
+    </div>`;
+}
+
+function renderContacts() {
+  const isAdmin = state.profile.role === 'admin';
+  // Fixed order: newest lead first, by the order each lead first arrived (its id never changes).
+  // A lead keeps its place here even when it sends new messages - only the Chats list reorders by latest message.
+  const leads = visibleLeads().slice().sort((a, b) => Number(b.id) - Number(a.id));
+  const rows = leads.map(l => `
+    <tr>
+      <td class="mono" data-label="Phone">+${esc(l.phone)}</td>
+      <td data-label="Name">${esc(l.lead_name) || '—'}</td>
+      ${isAdmin ? `<td data-label="Assigned to">${esc(tlName(l.assigned_to))}</td>` : ''}
+      <td data-label="Fund">${esc(l.fund_range) || '—'}</td>
+      <td data-label="Segment">${esc(l.segment) || '—'}</td>
+      <td data-label="State">${esc(l.state) || '—'}</td>
+      <td data-label="Language">${esc(l.language) || '—'}</td>
+      <td data-label="Status"><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : 'In progress'}</span></td>
+    </tr>`).join('');
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Contacts</div>
+          <div class="page-sub">${leads.length} leads visible to you</div>
+        </div>
+        ${tlFilterHtml()}
+      </div>
+      <div class="table-wrap">
+        <div class="search-row"><input placeholder="Search by phone…" oninput="filterContacts(this.value)"></div>
+        <div class="table-scroll">
+          <table id="contacts-table">
+            <thead><tr><th>Phone</th><th>Name</th>${isAdmin ? '<th>Assigned TL</th>' : ''}<th>Fund</th><th>Segment</th><th>State</th><th>Language</th><th>Status</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="8" style="color:var(--text-faint);">No leads yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+window.filterContacts = function(q) {
+  const qDigits = q.replace(/\D/g, '');
+  const qText = q.trim().toLowerCase();
+  document.querySelectorAll('#contacts-table tbody tr').forEach(tr => {
+    const phoneCell = tr.children[0]?.textContent || '';
+    const nameCell = tr.children[1]?.textContent || '';
+    const matchesPhone = qDigits && phoneCell.includes(qDigits);
+    const matchesName = qText && nameCell.toLowerCase().includes(qText);
+    tr.style.display = (!q || matchesPhone || matchesName) ? '' : 'none';
+  });
+};
+
+function groupMessages(msgs) {
+  const map = new Map();
+  for (const m of msgs) { if (!map.has(m.phone)) map.set(m.phone, []); map.get(m.phone).push(m); }
+  for (const [, arr] of map) arr.sort((a, b) => (new Date(a.timestamp) - new Date(b.timestamp)) || (a.id - b.id));
+  return map;
+}
+
+
+// Delivery state of a message we sent, drawn like WhatsApp: clock (sending), one tick (sent), two ticks (delivered), blue (read), red ! (failed).
+function tickHtml(m) {
+  if (m.direction !== 'out') return '';
+  const t = (cls, title, svg) => `<span class="ticks ${cls}" title="${title}" aria-label="${title}">${svg}</span>`;
+  if (m.pending) return t('pending', 'Sending', '<svg viewBox="0 0 17 11"><circle cx="8.5" cy="5.5" r="4"/><polyline points="8.5,3.2 8.5,5.6 10.2,6.6"/></svg>');
+  if (m.status === 'failed') return t('failed', 'Not delivered', '<svg viewBox="0 0 17 11"><circle cx="8.5" cy="5.5" r="4.6"/><line x1="8.5" y1="3" x2="8.5" y2="6"/><line x1="8.5" y1="7.8" x2="8.5" y2="7.9"/></svg>');
+  if (m.status === 'read' || m.status === 'delivered') return t(m.status, m.status === 'read' ? 'Read' : 'Delivered', '<svg viewBox="0 0 17 11"><polyline points="1,6 4,9 10.5,1.8"/><polyline points="6.2,8.2 7,9 13.5,1.8"/></svg>');
+  if (m.status === 'sent') return t('sent', 'Sent', '<svg viewBox="0 0 17 11"><polyline points="3.5,6 6.5,9 13,1.8"/></svg>');
+  return '';   // older messages have no status recorded
+}
+
+// Builds the conversation list and the open thread (with a date pill above each day) from current state.
+function buildChatParts() {
+  const msgs = visibleMessages();
+  const groups = groupMessages(msgs);
+  const leadsByPhone = new Map(visibleLeads().map(l => [l.phone, l]));
+  const phones = [...groups.keys()].sort((a, b) => new Date(groups.get(b).at(-1).timestamp) - new Date(groups.get(a).at(-1).timestamp));
+  if (state.activePhone && !groups.has(state.activePhone)) state.activePhone = null;
+  if (!state.activePhone && phones.length) state.activePhone = phones[0];
+
+  const listHtml = phones.length ? phones.map(phone => {
+    const thread = groups.get(phone), last = thread.at(-1);
+    const active = phone === state.activePhone ? 'active' : '';
+    const name = leadsByPhone.get(phone)?.lead_name || '';
+    const searchKey = (phone + ' ' + name).toLowerCase();
+    return `<div class="lead-item ${active}" data-search="${esc(searchKey)}" onclick="selectChat('${phone}')">
+      <div class="avatar">${initials(phone)}</div>
+      <div class="lead-meta">
+        <div class="lead-top"><div class="lead-phone mono">${name ? esc(name) : '+' + phone}</div><div class="lead-time mono">${fmtListTime(last.timestamp)}</div></div>
+        <div class="lead-preview">${last.direction === 'out' ? 'You: ' : ''}${esc(last.message)}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:20px;color:var(--text-faint);font-size:12.5px;">No conversations visible.</div>`;
+
+  let bubblesHtml = '';
+  let headHtml = '';
+  let composerHtml = '';
+  if (state.activePhone && groups.has(state.activePhone)) {
+    const thread = groups.get(state.activePhone);
+    let currentDay = null, open = false;
+    for (const m of thread) {
+      const key = dayKey(m.timestamp);
+      if (key !== currentDay) {
+        if (open) bubblesHtml += `</div>`;
+        bubblesHtml += `<div class="day-group"><div class="day-sep">${esc(dayLabel(m.timestamp))}</div>`;
+        currentDay = key; open = true;
+      }
+      bubblesHtml += `<div class="bubble ${m.direction}${m.pending ? ' pending' : ''}">${esc(m.message)}<span class="bubble-time mono">${m.pending ? 'Sending…' : fmtTime(m.timestamp)}${tickHtml(m)}</span></div>`;
+    }
+    if (open) bubblesHtml += `</div>`;
+    const headName = leadsByPhone.get(state.activePhone)?.lead_name || '';
+    headHtml = `
+      <div class="thread-head">
+        <button class="back-btn" onclick="goBackToList()" aria-label="Back to chats">‹</button>
+        <div class="avatar">${initials(state.activePhone)}</div>
+        <div style="min-width:0;">
+          <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" ${headName ? '' : 'class="mono"'}>${headName ? esc(headName) : '+' + state.activePhone}</div>
+          ${headName ? `<div class="mono" style="font-size:11.5px;color:var(--text-dim);">+${state.activePhone}</div>` : ''}
+        </div>
+      </div>`;
+    composerHtml = `
+      <div class="composer" id="composer">
+        <div class="composer-note" id="composer-note"></div>
+        <div class="composer-row">
+          <textarea id="composer-input" rows="1" placeholder="Type a message" oninput="composerInput(this)" onkeydown="composerKey(event)" onfocus="setTimeout(scrollThreadToBottom, 300)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()" aria-label="Send">➤</button>
+        </div>
+      </div>`;
+  }
+  return { listHtml, headHtml, bubblesHtml, composerHtml };
+}
+
+function renderChats() {
+  const { listHtml, headHtml, bubblesHtml, composerHtml } = buildChatParts();
+  const threadHtml = headHtml ? `${headHtml}<div class="thread">${bubblesHtml}</div>${composerHtml}` : `<div class="empty">Select a conversation</div>`;
+  return `
+    <div class="page chats-page" style="padding-bottom:0;">
+      <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
+      <div class="chats-layout" id="chats-layout">
+        <div class="lead-col" id="lead-col">
+          <div class="search-row" style="border-bottom:1px solid var(--line);"><input placeholder="Search name or number…" oninput="filterChats(this.value)"></div>
+          <div id="chat-list">${listHtml}</div>
+        </div>
+        <div class="thread-col" id="thread-col">${threadHtml}</div>
+      </div>
+    </div>`;
+}
+
+function scrollThreadToBottom() {
+  const t = document.querySelector('#thread-col .thread');
+  if (t) t.scrollTop = t.scrollHeight;
+}
+
+// Refreshes only the list and the open thread, keeping search text, list scroll and thread scroll position.
+function updateChatsView(opts) {
+  const forceBottom = !!(opts && opts.forceBottom);
+  const listEl = document.getElementById('chat-list');
+  const threadCol = document.getElementById('thread-col');
+  if (!listEl || !threadCol) return;
+  const { listHtml, headHtml, bubblesHtml, composerHtml } = buildChatParts();
+
+  listEl.innerHTML = listHtml;
+  const q = document.querySelector('#lead-col .search-row input');
+  if (q && q.value) filterChats(q.value);
+
+  if (!headHtml) { threadCol.innerHTML = `<div class="empty">Select a conversation</div>`; return; }
+  let threadEl = threadCol.querySelector('.thread');
+  const samePhone = threadCol.dataset.phone === state.activePhone && threadEl;
+  if (!samePhone) {
+    threadCol.innerHTML = `${headHtml}<div class="thread">${bubblesHtml}</div>${composerHtml}`;
+    threadCol.dataset.phone = state.activePhone;
+    scrollThreadToBottom();
+    refreshComposerState();
+    return;
+  }
+  const nearBottom = threadEl.scrollHeight - threadEl.scrollTop - threadEl.clientHeight < 80;
+  const prevTop = threadEl.scrollTop;
+  threadEl.innerHTML = bubblesHtml;
+  threadEl.scrollTop = (forceBottom || nearBottom) ? threadEl.scrollHeight : prevTop;
+  refreshComposerState();
+}
+
+// Re-draws whatever page is open WITHOUT resetting scroll position or search boxes (used by live updates).
+function softRender() {
+  if (state.loading || !state.session || !state.profile) return;
+  if (state.page === 'chats') { updateChatsView(); return; }
+  const main = document.getElementById('main');
+  if (!main) return;
+  const prevTop = main.scrollTop;
+  const q = main.querySelector('.search-row input');
+  const prevQuery = q ? q.value : '';
+  main.innerHTML = state.page === 'dashboard' ? renderDashboard() : renderContacts();
+  main.scrollTop = prevTop;
+  if (prevQuery) { const nq = main.querySelector('.search-row input'); if (nq) { nq.value = prevQuery; filterContacts(prevQuery); } }
+  wireTlSelect();
+}
+
+
+/* ---------- Sending a message from the app ----------
+   The app calls an n8n webhook with the logged-in user's Supabase token. n8n checks that this user may see the
+   lead (same row-level rules as the app), sends the text through the WhatsApp Cloud API and saves it to `messages`. */
+// SEND_URL comes from config.js
+const WA_WINDOW_MS = 24 * 3600 * 1000;
+let sending = false;
+
+// WhatsApp only allows free-form messages within 24h of the lead's last message.
+function windowOpen(phone) {
+  let last = 0;
+  for (const m of state.messages) if (m.phone === phone && m.direction === 'in') last = Math.max(last, new Date(m.timestamp).getTime());
+  return last > 0 && (Date.now() - last) < WA_WINDOW_MS;
+}
+function refreshComposerState() {
+  const input = document.getElementById('composer-input'), btn = document.getElementById('send-btn'), note = document.getElementById('composer-note');
+  if (!input || !btn || !note || !state.activePhone) return;
+  const open = windowOpen(state.activePhone);
+  input.disabled = !open || sending;
+  btn.disabled = !open || sending || !input.value.trim();
+  input.placeholder = open ? 'Type a message' : 'Replies are locked: the lead has not messaged in the last 24 hours';
+  if (!open) { note.className = 'composer-note'; note.textContent = 'WhatsApp only allows replies within 24 hours of the lead’s last message.'; }
+  else if (note.dataset.kind !== 'err') { note.className = 'composer-note'; note.textContent = ''; }
+}
+window.composerInput = function(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+  const note = document.getElementById('composer-note');
+  if (note && note.dataset.kind === 'err') { note.dataset.kind = ''; note.textContent = ''; note.className = 'composer-note'; }
+  refreshComposerState();
+};
+window.composerKey = function(e) {
+  // Enter sends on a computer; Shift+Enter makes a new line. On a phone Enter always makes a new line (use the send button).
+  const isPhone = window.matchMedia('(max-width: 760px)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (e.key === 'Enter' && !e.shiftKey && !isPhone) { e.preventDefault(); sendMessage(); }
+};
+function composerError(msg) {
+  const note = document.getElementById('composer-note');
+  if (!note) return;
+  note.dataset.kind = 'err'; note.className = 'composer-note err'; note.textContent = msg;
+}
+window.sendMessage = async function() {
+  const input = document.getElementById('composer-input');
+  const phone = state.activePhone;
+  if (!input || !phone || sending) return;
+  const text = input.value.trim();
+  if (!text || !windowOpen(phone)) return;
+  sending = true;
+  const tmp = { id: 'tmp-' + Date.now(), phone, direction: 'out', message: text, timestamp: new Date().toISOString(), pending: true };
+  state.messages.push(tmp);
+  input.value = ''; input.style.height = 'auto';
+  updateChatsView({ forceBottom: true });
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) throw new Error('login');
+    // text/plain keeps this a "simple" request, so the browser does not need a CORS pre-flight
+    const res = await fetch(SEND_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ phone, text, token: session.access_token }) });
+    let out = {}; try { out = await res.json(); } catch (e) {}
+    if (!res.ok || !out.ok) {
+      const err = new Error(out.error || 'send_failed'); err.code = out.error; throw err;
+    }
+    state.messages = state.messages.filter(m => m.id !== tmp.id);
+    sending = false;
+    await resync();
+    updateChatsView({ forceBottom: true });
+  } catch (e) {
+    state.messages = state.messages.filter(m => m.id !== tmp.id);
+    sending = false;
+    const cur = document.getElementById('composer-input');
+    if (cur && state.activePhone === phone && !cur.value) { cur.value = text; composerInput(cur); }
+    updateChatsView();
+    composerError(e.code === 'outside_24h' ? 'Not sent: the 24-hour WhatsApp reply window has closed.'
+      : e.code === 'not_allowed' ? 'Not sent: you do not have access to this lead.'
+      : 'Not sent. Check your connection and try again.');
+  }
+  sending = false;
+  refreshComposerState();
+};
+
+const isPhoneWidth = () => window.matchMedia('(max-width: 760px)').matches;
+window.selectChat = function(phone) {
+  state.activePhone = phone;
+  updateChatsView({ forceBottom: true });
+  setMobilePane('thread');
+  // One history entry per opened chat, so the phone's Back button returns to the list instead of closing the app
+  if (isPhoneWidth() && !(history.state && history.state.chat)) { try { history.pushState({ chat: true }, ''); } catch (e) {} }
+  scrollThreadToBottom();   // after the pane is visible, so the newest message is in view
+};
+window.goBackToList = function() {
+  if (history.state && history.state.chat) history.back();   // popstate below switches the pane
+  else setMobilePane('list');
+};
+window.addEventListener('popstate', () => { if (state.page === 'chats') setMobilePane('list'); });
+window.filterChats = function(q) {
+  const qText = q.trim().toLowerCase();
+  document.querySelectorAll('#chat-list .lead-item').forEach(el => {
+    const key = el.dataset.search || '';
+    el.style.display = (!qText || key.includes(qText)) ? '' : 'none';
+  });
+};
+window.setMobilePane = function(which) {
+  const layout = document.getElementById('chats-layout');
+  if (!layout) return;
+  layout.classList.toggle('show-thread', which === 'thread');
+  const app = document.querySelector('.app');
+  if (app) app.classList.toggle('in-thread', which === 'thread');   // hides the bottom tabs while a chat is open (phones only)
+};
+
+function render() {
+  const root = document.getElementById('root');
+  if (state.loading) { root.innerHTML = `<div class="loading">Loading…</div>`; return; }
+  if (state.initError) {
+    const isSandbox = /claude\.(ai|site)$/.test(location.hostname) || location.hostname === 'localhost';
+    root.innerHTML = `<div class="loading" style="flex-direction:column;gap:10px;text-align:center;padding:30px;">
+      <div style="font-size:14px;color:var(--text);font-weight:700;">Can't reach the database</div>
+      <div style="font-size:12.5px;max-width:360px;">${isSandbox
+        ? `This sandboxed preview blocks outside network calls for security. This is expected here — once deployed to Vercel, this screen will load your real login and leads normally.`
+        : `The app couldn't connect to Supabase. This usually means your Supabase project is paused (free tier projects pause after inactivity — check your Supabase dashboard and resume it), or there's a network issue. Open the browser console (F12) for the exact error.`}</div>
+      <button class="btn-primary" style="width:auto;padding:8px 20px;margin-top:4px;" onclick="location.reload()">Retry</button>
+    </div>`;
+    return;
+  }
+  if (!state.session) { root.innerHTML = renderLogin(); wireLogin(); return; }
+  if (!state.profile) { root.innerHTML = `<div class="loading">Setting up your account… if this doesn't finish, ask your admin to check your profile record.</div>`; return; }
+
+  root.innerHTML = renderApp();
+  const main = document.getElementById('main');
+  if (state.page === 'dashboard') main.innerHTML = renderDashboard();
+  else if (state.page === 'contacts') main.innerHTML = renderContacts();
+  else if (state.page === 'chats') {
+    main.innerHTML = renderChats();
+    setMobilePane(window.innerWidth <= 760 ? 'list' : 'thread');
+    const tc = document.getElementById('thread-col');
+    if (tc) tc.dataset.phone = state.activePhone || '';
+    scrollThreadToBottom();   // open on the newest message, like WhatsApp
+  }
+
+  document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => { state.page = el.dataset.page; render(); }));
+  document.getElementById('logout-btn').addEventListener('click', logout);
+  wireTlSelect();
+}
+function wireTlSelect() {
+  const tlSelect = document.getElementById('tl-filter-select');
+  if (tlSelect) tlSelect.addEventListener('change', (e) => { state.tlFilter = e.target.value; state.activePhone = null; render(); });
+}
+
+const initTimeout = setTimeout(() => {
+  if (state.loading) { state.loading = false; state.initError = true; render(); }
+}, 6000);
+init().finally(() => clearTimeout(initTimeout));
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
